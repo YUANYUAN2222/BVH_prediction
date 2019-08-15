@@ -7,9 +7,11 @@ from tqdm import tqdm
 
 import data_gen.motion.Animation as Animation
 import data_gen.motion.BVH as BVH
-from data_gen.common import utils
+from common.bvh_joints import BVHJoints
+from data_gen import utils
 from data_gen.configs import config
 from data_gen.motion.Quaternions import Quaternions
+from visualization.bvh_viz import viz_folder
 
 FRAME_RATE = config.data.FRAME_RATE
 
@@ -20,7 +22,7 @@ def get_index(list_list, value):
             return i
 
 
-def process_data(anim):
+def extract_data(anim):
     glob_joint_trans = Animation.transforms_global(anim)
     glob_joint_pos = glob_joint_trans[:, :, :3, 3] / glob_joint_trans[:, :, 3:, 3]
     glob_joint_rot = Quaternions.from_transforms(glob_joint_trans)
@@ -58,6 +60,24 @@ def process_data(anim):
     return np.array(result)
 
 
+def standardize_data(data):
+    """
+    1. Put Pelvis into (0, 0, 0)
+    2. Standardize xzy into [-1, 1]
+    :param data: data to be normalized
+    :return: normalized data
+    """
+    # Drop y of Pelvis into 0
+    data[:, 0] -= np.tile(np.expand_dims(data[:, 0, BVHJoints.Pelvis.value], 1), (1, len(BVHJoints), 1))
+
+    # Standardize
+    # TODO: Standardize position
+
+    # TODO: Standardize rotations
+
+    return data
+
+
 def process_worker(anim_dir, anim_name, prep_dir):
     anim_file = os.path.join(anim_dir, anim_name)
     # print('Load animation file', anim_file)
@@ -73,7 +93,8 @@ def process_worker(anim_dir, anim_name, prep_dir):
     prep_file = os.path.join(prep_dir, anim_name.replace('.bvh', '.npy'))
     # print('Save prepare file', prep_file)
 
-    result = process_data(anim)
+    data = extract_data(anim)
+    result = standardize_data(data)
 
     np.save(prep_file, result, allow_pickle=True)
 
@@ -87,17 +108,21 @@ def main():
     def check_valid(x):
         return 'bvh' in x and not (config.data.withBall and x.startswith('without_ball'))
 
+    print('pre-processing...')
     anim_names = list(filter(check_valid, os.listdir(anim_dir)))
     pbar = tqdm(total=len(anim_names))
-    pool = multiprocessing.Pool()
+    pool = multiprocessing.Pool(1)
     for anim_name in anim_names:
-        pool.apply_async(func=process_worker, args=(anim_dir, anim_name, prep_dir), callback=lambda _: pbar.update())
+        # pool.apply_async(func=process_worker, args=(anim_dir, anim_name, prep_dir), callback=lambda _: pbar.update())
+        process_worker(anim_dir, anim_name, prep_dir)
+        pbar.update()
 
     pool.close()
     pool.join()
     pbar.close()
 
-    # print('Done')
+    print('visualizing...')
+    viz_folder(os.path.join(config.data.data_dir, config.data.data_processed_name))
 
 
 if __name__ == '__main__':

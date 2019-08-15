@@ -1,3 +1,6 @@
+import os
+from multiprocessing import Pool
+
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d.axes3d as p3
 import numpy as np
@@ -8,6 +11,11 @@ from common.bvh_joints import BVHParents
 
 
 def set_equal_aspect(ax, data):
+    """
+    Create white cubic bounding box to make sure that 3d axis is in equal aspect.
+    :param ax: 3D axis
+    :param data: shape of(frames, 3), generated from BVH using convert_bvh2dataset.py
+    """
     X, Y, Z = data[..., 0], data[..., 1], data[..., 2]
 
     # Create cubic bounding box to simulate equal aspect ratio
@@ -24,26 +32,18 @@ def viz_data3d(data, save_path, fps=30):
     # Attaching 3D axis to the figure
     fig = plt.figure()
     ax = p3.Axes3D(fig)
+
     # Setting the axes properties
-    axis_max = max(abs(np.max(data)), abs(np.min(data)))
-    # ax.set_xlim3d(-axis_max, axis_max)
     ax.set_xlabel('X')
-    # ax.set_ylim3d(-axis_max, axis_max)
     ax.set_ylabel('Y')
-    # ax.set_zlim3d(-axis_max, axis_max)
     ax.set_zlabel('Z')
     ax.set_title('3D Test')
 
-    # ax.set_aspect('equal') Not work
+    # ax.set_aspect('equal') Not work, using self-defined tricky
     set_equal_aspect(ax, data)
 
-    # # Creating fifty line objects.
-    # # NOTE: Can't pass empty arrays into 3d version of plot()
-    # lines = [ax.plot(dat[0, 0:1], dat[1, 0:1], dat[2, 0:1])[0] for dat in data]
     points = None
     lines = None
-
-    pbar = tqdm(total=len(data))
 
     def get_plot_para(this_data, i, p):
         return [this_data[i][0], this_data[p][0]], \
@@ -59,9 +59,9 @@ def viz_data3d(data, save_path, fps=30):
 
         return points
 
-    def update_plot(frames):
-        nonlocal points, lines, pbar
-        this_data = data[frames]
+    def update_plot(frame):
+        nonlocal points, lines
+        this_data = data[frame]
 
         points.set_data(this_data.T[:2])
         points.set_3d_properties(this_data.T[2], 'z')
@@ -79,26 +79,20 @@ def viz_data3d(data, save_path, fps=30):
             line3d.set_ydata(xyz[1])
             line3d.set_3d_properties(xyz[2], zdir='z')
 
-        pbar.update()
         return points
 
     # Creating the Animation object
     line_ani = FuncAnimation(fig, update_plot, frames=len(data), init_func=init, interval=1000 / fps)
     plt.rcParams['animation.ffmpeg_path'] = 'F:\\ffmpeg\\bin\\ffmpeg.exe'
-    # writer = FFMpegWriter()
     line_ani.save(save_path, writer='ffmpeg', fps=30)
 
-    pbar.close()
 
-
-def load_xyz(npy_path):
+def preprocess_xyz(npy):
     """
     Load xyzw data
-    :param npy_path:
+    :param npy: loaded numpy array
     :return:
     """
-    npy = np.load(npy_path, allow_pickle=True)
-
     xyz = npy[:, 0]
 
     # Change xzy(BVH format) into xyz, then reverse x (x ---> -x)
@@ -108,9 +102,26 @@ def load_xyz(npy_path):
     return xyz
 
 
-if __name__ == '__main__':
-    npy_path = '../data_gen/data_new/dataset/215-1_Take_001.npy'
+def viz_folder(folder_path):
+    npy_files = [os.path.join(folder_path, name) for name in filter(lambda x: '.npy' in x, os.listdir(folder_path))]
+    pbar = tqdm(total=len(npy_files))
+
+    pool = Pool()
+    for npy_path in npy_files:
+        pool.apply_async(viz_file, args=(npy_path,), callback=lambda _: pbar.update())
+
+    pool.close()
+    pool.join()
+
+    pbar.close()
+
+
+def viz_file(npy_path):
     save_path = npy_path.replace('.npy', '.mp4')
-    data = load_xyz(npy_path)
+    data = preprocess_xyz(np.load(npy_path, allow_pickle=True))
 
     viz_data3d(data, save_path)
+
+
+if __name__ == '__main__':
+    viz_folder('../dataset/processed')

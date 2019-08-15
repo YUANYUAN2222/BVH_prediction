@@ -13,9 +13,9 @@ config.store_name = "MANN_NBA_motion_label_noball_all_label_allbvh_merge_newMANN
 
 # add data config
 config.data = EasyDict()
-config.data.data_dir = "./data_new"
+config.data.data_dir = "../dataset"
 config.data.data_name = 'NBA_small_test'
-config.data.data_processed_name = 'dataset'
+config.data.data_processed_name = 'processed'
 # config.data.data_processed_name = 'NBA_small_test_processed'
 config.data.FRAME_RATE = 60
 config.data.withBall = False

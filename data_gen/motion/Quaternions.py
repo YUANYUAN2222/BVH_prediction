@@ -1,5 +1,5 @@
 import numpy as np
-from data_gen.common import utils
+from data_gen import utils
 
 
 class Quaternions:

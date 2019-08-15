@@ -1,4 +1,3 @@
-import sys
 import os
 
 import scipy.ndimage.filters as filters
@@ -7,7 +6,7 @@ import data_gen.motion.Animation as Animation
 from data_gen.motion.Pivots import Pivots
 import numpy as np
 import data_gen.motion.BVH as BVH
-from data_gen.common import utils
+from data_gen import utils
 import json
 import itertools
 import multiprocessing
