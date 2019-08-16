@@ -16,12 +16,6 @@ from visualization.bvh_viz import viz_folder
 FRAME_RATE = config.data.FRAME_RATE
 
 
-def get_index(list_list, value):
-    for i, l in enumerate(list_list):
-        if value in l:
-            return i
-
-
 def extract_data(anim):
     glob_joint_trans = Animation.transforms_global(anim)
     glob_joint_pos = glob_joint_trans[:, :, :3, 3] / glob_joint_trans[:, :, 3:, 3]
@@ -80,15 +74,9 @@ def standardize_data(data):
 
 def process_worker(anim_dir, anim_name, prep_dir):
     anim_file = os.path.join(anim_dir, anim_name)
-    # print('Load animation file', anim_file)
 
     anim, names, _ = BVH.load(anim_file)
-    # for i in range(len(names)):
-    #     print(i, names[i])
-
     anim = utils.down_sample(anim, fps=30)
-
-    # print("len(anim): ", len(anim))
 
     prep_file = os.path.join(prep_dir, anim_name.replace('.bvh', '.npy'))
     # print('Save prepare file', prep_file)
