@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 import data_gen.motion.Animation as Animation
 import data_gen.motion.BVH as BVH
-from common.bvh_joints import BVHJoints
+from common.bvh_joints import BVHJoints, BVH_adj
 from data_gen import utils
 from data_gen.configs import config
 from data_gen.motion.Quaternions import Quaternions
@@ -54,18 +54,65 @@ def extract_data(anim):
     return np.array(result)
 
 
+def distance(a, b):
+    """
+    Calculate the distance between a and b. (x1, y1, z1) & (x2, y2, z2)
+    :param a:
+    :param b:
+    :return:
+    """
+    return np.linalg.norm(a - b)
+
+
+def _skeleton_standardization(data, spine_len=0.741):
+    """
+    Standardize the skeleton according to the spine length.
+    :param data: The data of one frame [21, xzy]
+    :param spine_len: The length from Pelvis --> Spine --> Spine1 --> Head.
+    :return:
+    """
+    spine_index = [BVHJoints.Pelvis, BVHJoints.Spine, BVHJoints.Spine1, BVHJoints.Head]
+    spines = [data[i.value] for i in spine_index]
+
+    # The scale index of skeletons
+    scale = spine_len / sum([distance(spines[i], spines[i + 1]) for i in range(len(spines) - 1)])
+
+    def dfs(parent, node, change):
+        """
+        Update node position and influenced positions recursively.
+        :param parent: The base point which keep stable.
+        :param node: The end point which changes.
+        :param change: The cumulative changes influenced by the formal point change.
+        :return:
+        """
+        data[node] += change
+        relative_change = (data[node] - data[parent]) * (scale - 1)
+        data[node] += relative_change
+        change = change + relative_change  # Don't use +=, which would lead to in-place add for ndarray
+
+        influenced = BVH_adj[node]
+        for i in influenced:
+            dfs(node, i, change)
+
+    # DFS update
+    for n in BVH_adj[BVHJoints.Pelvis.value]:
+        dfs(BVHJoints.Pelvis.value, n, change=0)
+
+
 def standardize_data(data):
     """
     1. Put Pelvis into (0, 0, 0)
     2. Standardize xzy into [-1, 1]
-    :param data: data to be normalized
+    :param data: data to be normalized, shape of (frames, 3, 21, xzy)
     :return: normalized data
     """
     # Drop y of Pelvis into 0
     data[:, 0] -= np.tile(np.expand_dims(data[:, 0, BVHJoints.Pelvis.value], 1), (1, len(BVHJoints), 1))
 
     # Standardize
-    # TODO: Standardize position
+    # Standardize position according to the skeleton length
+    for d in range(len(data)):
+        _skeleton_standardization(data[d][0])
 
     # TODO: Standardize rotations
 
